@@ -6,10 +6,21 @@ import os
 import torch
 
 
+  # random_frame_ids
+  # depth
+  # adjacent
+  # contour
+  # median
+  # laplacian
+  # gradangle
 
-
-
-
+# # print(data['depth'])
+# image1 = data['depth']
+# frames = data['random_frame_ids']
+# image = image1[46]
+# print(data['adjacent'][0].shape)
+# plt.imshow(data['adjacent'][0])
+# plt.show()
 
 
 

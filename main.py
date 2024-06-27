@@ -1,26 +1,21 @@
-# import torch
-# from torch import nn
-# # import torchvision
-# # from torchvision import datasets
-# # from torchvision.transforms import ToTensor
-# import matplotlib.pyplot as plt
-import numpy as np
-import matplotlib.pyplot as plt
+from dataset import *
+from torch.utils.data import DataLoader
 
-data = np.load('/Volumes/Samsung USB/depth_processed/120_20210119_adj10_floor5000.npz', allow_pickle=True)
+data = CowsDataset("/Volumes/Samsung USB/depth_processed", "/Volumes/Samsung USB/bcs_dict.csv")
+print(len(data))
+print(data.__getitem__(2))
 
-  # random_frame_ids
-  # depth
-  # adjacent
-  # contour
-  # median
-  # laplacian
-  # gradangle
-
-# print(data['depth'])
-image1 = data['depth']
-frames = data['random_frame_ids']
-image = image1[46]
-print(data['adjacent'][0].shape)
-plt.imshow(data['adjacent'][0])
-plt.show()
+# # figure out train/test split
+#
+# train_data = None
+# test_data = None
+#
+# train_dataloader = DataLoader(dataset=train_data,
+#                               batch_size=1,
+#                               num_workers=1,
+#                               shuffle=True)
+#
+# test_dataloader = DataLoader(dataset=test_data,
+#                              batch_size=1,
+#                              num_workers=1,
+#                              shuffle=False)

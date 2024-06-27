@@ -1,12 +1,9 @@
 import torch
-import matplotlib.pyplot as plt
 import numpy as np
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data import Dataset
-from torchvision import datasets, transforms
 import os
-import pandas as pd
 import csv
 
 # folder_path = "/Volumes/Samsung USB/depth_processed"
@@ -17,7 +14,7 @@ class DataObject():
     self.label = label
 
 class CowsDataset(Dataset):
-  def __init__(self, root_dir, csv_file, mode='depth'):
+  def __init__(self, root_dir, csv_file, mode='gradangle'):
     self.data = []
 
     def search_name(name):
@@ -44,7 +41,7 @@ class CowsDataset(Dataset):
     for name in filenames:
       if name[0] != ".":
         video_np = np.load(os.path.join(root_dir, name), allow_pickle=True)
-        video = video_np[mode]
+        video = np.array(video_np[mode])
 
         try:
           label = label_dict[search_name(name)]
@@ -60,7 +57,7 @@ class CowsDataset(Dataset):
   def __getitem__(self, idx):
     item = self.data[idx]
     return item.video, item.label
+    # return torch.from_numpy(item.video), item.label
 
-data = CowsDataset("/Volumes/Samsung USB/depth_processed", "/Volumes/Samsung USB/bcs_dict.csv")
-# print(len(data))
-print(data.__getitem__(2))
+
+
