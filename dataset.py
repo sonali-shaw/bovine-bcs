@@ -5,18 +5,40 @@ from torch.utils.data import DataLoader, Dataset
 from torch.utils.data import Dataset
 import os
 import csv
+from dataclasses import dataclass
 
 # folder_path = "/Volumes/Samsung USB/depth_processed"
 
-class DataObject():
-  def __init__(self, video, label):
-    self.video = video
-    self.label = label
+@dataclass
+class DataObject:
+    video: np.ndarray
+    label: int
 
 class CowsDataset(Dataset):
-  def __init__(self, root_dir, csv_file, mode='gradangle'):
+  def __init__(self, root_dir, csv_file, mode='depth'):
     self.data = []
 
+    def __pad_array_to_shape(a, target_shape):
+      pad_width = [(0, max(t - s, 0)) for s, t in zip(a.shape, target_shape)]
+      padded_array = np.pad(a, pad_width, mode='constant', constant_values=0)
+      slices = tuple(slice(0, t) for t in target_shape)
+      padded_array = padded_array[slices]
+      return padded_array
+    def __get_frame_length(arr):
+      biggest = 0
+      for i in range(len(arr)):
+        var = len(arr[i])
+        if var > biggest:
+          biggest = var
+      return biggest
+    def __get_channel_length(arr):
+      biggest = 0
+      for i in range(len(arr)):
+        for j in range(len(arr[i])):
+          var = len(arr[i][j])
+          if var > biggest:
+            biggest = var
+      return biggest
     def search_name(name):
       """ helper function for getting the name to search the csv file"""
       name_spl = name.split("_")
@@ -36,28 +58,33 @@ class CowsDataset(Dataset):
                           "LABELING WILL BE WRONG")
         label_dict[key_to_add] = value
 
-    # get numpy arrays from root directory and add to data_dict
+    # get numpy arrays from root directory and add to self.data
     filenames = os.listdir(root_dir)
     for name in filenames:
       if name[0] != ".":
         video_np = np.load(os.path.join(root_dir, name), allow_pickle=True)
         video = np.array(video_np[mode])
 
+        padded_vid = []
+        channel_length = __get_channel_length(video)
+        frame_length = __get_frame_length(video)
+        for frame in video:
+          padded_vid.append(__pad_array_to_shape(frame, (frame_length, channel_length)))
+
         try:
           label = label_dict[search_name(name)]
         except:
           print(f"No label found in the csv for {name}")
 
-        new_item = DataObject(video, label)
+        new_item = DataObject(np.array(padded_vid), label)
         self.data.append(new_item)
+
 
   def __len__(self):
     return len(self.data)
 
   def __getitem__(self, idx):
     item = self.data[idx]
-    return item.video, item.label
-    # return torch.from_numpy(item.video), item.label
-
-
+    # return item.video, item.label
+    return torch.from_numpy(item.video), item.label
 
