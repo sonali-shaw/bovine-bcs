@@ -26,25 +26,38 @@ def get_channel_length(arr):
                 biggest = var
     return biggest
 
-loaded_np = np.load("/Volumes/Samsung USB/depth_processed/120_20210119_adj10_floor5000.npz", allow_pickle=True)
+loaded_np = np.load("/Volumes/Samsung USB/depth_processed/8008_20210122_adj10_floor5000.npz", allow_pickle=True)
 frames = np.array(loaded_np['depth'])
+frames2 = np.array(loaded_np['adjacent'])
+frames3 = np.array(loaded_np['median'])
 
-new_frames = []
-channel_length = get_channel_length(frames)
-frame_length = get_frame_length(frames)
+print(len(frames[48][6]))
+print(len(frames2[48][6]))
+print(len(frames3[48][6]))
+# print(list(loaded_np.keys()))
 
-for frame in frames:
-    new_frames.append(pad_array_to_shape(frame, (frame_length, channel_length)))
+# new_frames = []
+# channel_length = get_channel_length(frames)
+# frame_length = get_frame_length(frames)
+#
+# print(f"frame length: {frame_length}")
+# print(f"channel length: {channel_length}")
+
+# plt.imshow(frames[0])
+# plt.show()
+
+# for frame in frames:
+#     new_frames.append(pad_array_to_shape(frame, (frame_length, channel_length)))
 
 # print(type(np.array(new_frames)))
 
-
-fig, ax = plt.subplots()
-def update_frame(frame_idx):
-  frame = new_frames[frame_idx]
-  ax.cla()
-  img = ax.imshow(frame)
-  return img
-
-animation = FuncAnimation(fig, update_frame, frames=len(new_frames), interval=50)
-plt.show()
+#
+# fig, ax = plt.subplots()
+# def update_frame(frame_idx):
+#   frame = new_frames[frame_idx]
+#   ax.cla()
+#   img = ax.imshow(frame)
+#   return img
+#
+# animation = FuncAnimation(fig, update_frame, frames=len(new_frames), interval=50)
+# plt.show()

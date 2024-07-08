@@ -1,22 +1,42 @@
 from dataset import *
 import math
 from torch.utils.data import DataLoader
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 
-full_dataset = CowsDataset("/Volumes/Samsung USB/depth_processed", "/Volumes/Samsung USB/bcs_dict.csv")
 
-# 70:30 split
-train_size = math.floor(0.7*len(full_dataset))
-test_size = len(full_dataset) - train_size
+full_dataset = CowsDataset("/Volumes/Samsung USB/depth_processed", "/Volumes/Samsung USB/bcs_dict.csv", permute=True)
 
-train_data, test_data = torch.utils.data.random_split(full_dataset, [train_size, test_size])
+frames = []
+for i in range(50):
+  frames.append(full_dataset[i][0])
 
-train_dataloader = DataLoader(dataset=train_data,
-                              batch_size=1,
-                              num_workers=1,
-                              shuffle=True)
 
-test_dataloader = DataLoader(dataset=test_data,
-                             batch_size=1,
-                             num_workers=1,
-                             shuffle=False)
+fig, ax = plt.subplots()
+def update_frame(frame_idx):
+  frame = frames[frame_idx]
+  ax.cla()
+  img = ax.imshow(frame)
+  return img
+
+animation = FuncAnimation(fig, update_frame, frames=len(frames), interval=50)
+plt.show()
+
+#
+#
+# train_size = math.floor(0.8*len(full_dataset))
+# test_size = len(full_dataset) - train_size
+#
+# train_data, test_data = torch.utils.data.random_split(full_dataset, [train_size, test_size])
+#
+# train_dataloader = DataLoader(dataset=train_data,
+#                               batch_size=1,
+#                               num_workers=1,
+#                               shuffle=True)
+#
+# test_dataloader = DataLoader(dataset=test_data,
+#                              batch_size=1,
+#                              num_workers=1,
+#                              shuffle=False)
+
 

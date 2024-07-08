@@ -1,3 +1,4 @@
+import random
 import torch
 import numpy as np
 from torch import nn
@@ -15,8 +16,9 @@ class DataObject:
     label: int
 
 class CowsDataset(Dataset):
-  def __init__(self, root_dir, csv_file, mode='depth'):
-    self.data = []
+  def __init__(self, root_dir, csv_file, mode='depth', permute=False):
+    self.padded_imgs = []
+    modes = [ 'depth', 'adjacent', 'contour', 'median', 'laplacian', 'gradangle']
 
     def __pad_array_to_shape(a, target_shape):
       pad_width = [(0, max(t - s, 0)) for s, t in zip(a.shape, target_shape)]
@@ -24,21 +26,6 @@ class CowsDataset(Dataset):
       slices = tuple(slice(0, t) for t in target_shape)
       padded_array = padded_array[slices]
       return padded_array
-    def __get_frame_length(arr):
-      biggest = 0
-      for i in range(len(arr)):
-        var = len(arr[i])
-        if var > biggest:
-          biggest = var
-      return biggest
-    def __get_channel_length(arr):
-      biggest = 0
-      for i in range(len(arr)):
-        for j in range(len(arr[i])):
-          var = len(arr[i][j])
-          if var > biggest:
-            biggest = var
-      return biggest
     def search_name(name):
       """ helper function for getting the name to search the csv file"""
       name_spl = name.split("_")
@@ -58,33 +45,35 @@ class CowsDataset(Dataset):
                           "LABELING WILL BE WRONG")
         label_dict[key_to_add] = value
 
-    # get numpy arrays from root directory and add to self.data
+    # get numpy arrays from root directory and add to dataset
+    largest_channel = 0
+    largest_frame = 0
     filenames = os.listdir(root_dir)
     for name in filenames:
       if name[0] != ".":
-        video_np = np.load(os.path.join(root_dir, name), allow_pickle=True)
-        video = np.array(video_np[mode])
+        file_np = np.load(os.path.join(root_dir, name), allow_pickle=True)
+        label = label_dict[search_name(name)]
 
-        padded_vid = []
-        channel_length = __get_channel_length(video)
-        frame_length = __get_frame_length(video)
+        if permute:
+          video = []
+          for i in range(50): # because there are 50 frames in each video
+            rand_mode = modes[random.randint(0, 5)]
+            video.append(file_np[rand_mode][i])
+        else:
+          video = np.array(file_np[mode])
+
         for frame in video:
-          padded_vid.append(__pad_array_to_shape(frame, (frame_length, channel_length)))
-
-        try:
-          label = label_dict[search_name(name)]
-        except:
-          print(f"No label found in the csv for {name}")
-
-        new_item = DataObject(np.array(padded_vid), label)
-        self.data.append(new_item)
-
+          if len(frame) > largest_frame:
+            largest_frame = len(frame)
+          if len(frame[0]) > largest_channel:
+            largest_channel = len(frame[0])
+          tup = (__pad_array_to_shape(frame, (largest_frame, largest_channel)), label)
+          self.padded_imgs.append(tup)
 
   def __len__(self):
-    return len(self.data)
+    return len(self.padded_imgs)
 
   def __getitem__(self, idx):
-    item = self.data[idx]
-    # return item.video, item.label
-    return torch.from_numpy(item.video), item.label
+    item = self.padded_imgs[idx]
+    return torch.from_numpy(item[0]), item[1]
 
