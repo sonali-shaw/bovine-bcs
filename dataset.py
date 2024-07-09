@@ -80,23 +80,22 @@ class CowsDataset(Dataset):
         if name[0] != ".":
             file_np = np.load(os.path.join(self.root_dir, name), allow_pickle=True)
             label = label_dict[search_name(name)]
-            # if permute:
-        #     video = []
-        #     for i in range(50): # because there are 50 frames in each video
-        #         rand_mode = modes[random.randint(0, 5)]
-        #         video.append(file_np[rand_mode][i])
-        # else:
-            video = np.array(file_np[mode])
-            for img in video:
-                all_imgs.append(img)
-                corr_labels.append(label)
+            if mode == 'permute':
+                for i in range(50): # because there are 50 frames in each video
+                    rand_mode = modes[random.randint(0, 5)]
+                    all_imgs.append(file_np[rand_mode][i])
+                    corr_labels.append(label)
+            else:
+                video = np.array(file_np[mode])
+                for img in video:
+                    all_imgs.append(img)
+                    corr_labels.append(label)
 
     channel_length = __get_channel_length(all_imgs)
     frame_length = __get_frame_length(all_imgs)
     for i in range(len(all_imgs)):
         padded_img = __pad_array_to_shape(all_imgs[i], (frame_length, channel_length))
         self.dataset.append( (padded_img, corr_labels[i]) )
-
 
   def __len__(self):
     return len(self.dataset)
@@ -109,7 +108,7 @@ root_dir_path = Path("/Volumes/Samsung USB/depth_processed")
 csv_path = Path("/Volumes/Samsung USB/bcs_dict.csv")
 
 start_time = time.time()
-full_dataset = CowsDataset(root_dir_path, csv_path, mode='contour')
+full_dataset = CowsDataset(root_dir_path, csv_path, mode='permute')
 end_time = time.time()
 print(f"time taken: {end_time - start_time}")
 
