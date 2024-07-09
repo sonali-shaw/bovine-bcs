@@ -5,8 +5,12 @@ from torch import nn
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data import Dataset
 import os
-import csv
 from dataclasses import dataclass
+from pathlib import Path
+import pandas as pd
+import time
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 
 # folder_path = "/Volumes/Samsung USB/depth_processed"
 
@@ -16,64 +20,110 @@ class DataObject:
     label: int
 
 class CowsDataset(Dataset):
-  def __init__(self, root_dir, csv_file, mode='depth', permute=False):
+  def __init__(self,
+               root_dir: Path | str,
+               csv_file: Path | str,
+               mode: str = 'depth',
+               permute: bool = False,
+               permuted_types: tuple = ()
+              ):
+
+    self.root_dir = Path(root_dir) if not isinstance(root_dir, Path) else root_dir
+    self.csv_file = Path(csv_file) if not isinstance(csv_file, Path) else csv_file
+
+    self.dataset = []
     self.padded_imgs = []
-    modes = [ 'depth', 'adjacent', 'contour', 'median', 'laplacian', 'gradangle']
+    if mode == 'permute':
+        modes = [ 'depth', 'adjacent', 'contour', 'median', 'laplacian', 'gradangle']
+    if type(mode) == tuple:
+        modes = list(mode)
 
     def __pad_array_to_shape(a, target_shape):
-      pad_width = [(0, max(t - s, 0)) for s, t in zip(a.shape, target_shape)]
-      padded_array = np.pad(a, pad_width, mode='constant', constant_values=0)
-      slices = tuple(slice(0, t) for t in target_shape)
-      padded_array = padded_array[slices]
-      return padded_array
+        pad_width = [(0, max(t - s, 0)) for s, t in zip(a.shape, target_shape)]
+        padded_array = np.pad(a, pad_width, mode='constant', constant_values=0)
+        slices = tuple(slice(0, t) for t in target_shape)
+        padded_array = padded_array[slices]
+        return padded_array
     def search_name(name):
-      """ helper function for getting the name to search the csv file"""
-      name_spl = name.split("_")
-      return name_spl[0] + "_" + name_spl[1]
+        """ helper function for getting the name to search the csv file"""
+        name_spl = name.split("_")
+        return name_spl[0] + "_" + name_spl[1]
+    def __get_frame_length(arr):
+        biggest = 0
+        for i in range(len(arr)):
+            var = len(arr[i])
+            if var > biggest:
+                biggest = var
+        return biggest
+    def __get_channel_length(arr):
+        biggest = 0
+        for i in range(len(arr)):
+            for j in range(len(arr[i])):
+                var = len(arr[i][j])
+                if var > biggest:
+                    biggest = var
+        return biggest
 
-    # make dict of labels
+    csv_df = pd.read_csv(self.csv_file)
     label_dict = {}
-    with open(csv_file, 'r') as csvfile:
-      reader = csv.reader(csvfile)
-      next(reader, None)
-      for row in reader:
-        key, value = row[0], row[1]
-        key_spl = key.split("_")
-        key_to_add = key_spl[0] + "_" + key_spl[1]
-        if key_to_add in label_dict:
-          raise Exception("Repeated keys for labeling, check file names and column one of the csv. "
-                          "LABELING WILL BE WRONG")
-        label_dict[key_to_add] = value
 
-    # get numpy arrays from root directory and add to dataset
-    largest_channel = 0
-    largest_frame = 0
-    filenames = os.listdir(root_dir)
+    for tup in csv_df.itertuples():
+        filename, bcs = tup.filename, tup.BCSq
+        filename = filename.split("_")
+        filename = "_".join([filename[i] for i in (0, 1)])
+        label_dict[filename] = bcs
+
+    all_imgs = []
+    corr_labels = []
+    filenames = os.listdir(self.root_dir)
     for name in filenames:
-      if name[0] != ".":
-        file_np = np.load(os.path.join(root_dir, name), allow_pickle=True)
-        label = label_dict[search_name(name)]
+        if name[0] != ".":
+            file_np = np.load(os.path.join(self.root_dir, name), allow_pickle=True)
+            label = label_dict[search_name(name)]
+            # if permute:
+        #     video = []
+        #     for i in range(50): # because there are 50 frames in each video
+        #         rand_mode = modes[random.randint(0, 5)]
+        #         video.append(file_np[rand_mode][i])
+        # else:
+            video = np.array(file_np[mode])
+            for img in video:
+                all_imgs.append(img)
+                corr_labels.append(label)
 
-        if permute:
-          video = []
-          for i in range(50): # because there are 50 frames in each video
-            rand_mode = modes[random.randint(0, 5)]
-            video.append(file_np[rand_mode][i])
-        else:
-          video = np.array(file_np[mode])
+    channel_length = __get_channel_length(all_imgs)
+    frame_length = __get_frame_length(all_imgs)
+    for i in range(len(all_imgs)):
+        padded_img = __pad_array_to_shape(all_imgs[i], (frame_length, channel_length))
+        self.dataset.append( (padded_img, corr_labels[i]) )
 
-        for frame in video:
-          if len(frame) > largest_frame:
-            largest_frame = len(frame)
-          if len(frame[0]) > largest_channel:
-            largest_channel = len(frame[0])
-          tup = (__pad_array_to_shape(frame, (largest_frame, largest_channel)), label)
-          self.padded_imgs.append(tup)
 
   def __len__(self):
-    return len(self.padded_imgs)
+    return len(self.dataset)
 
   def __getitem__(self, idx):
-    item = self.padded_imgs[idx]
+    item = self.dataset[idx]
     return torch.from_numpy(item[0]), item[1]
+
+root_dir_path = Path("/Volumes/Samsung USB/depth_processed")
+csv_path = Path("/Volumes/Samsung USB/bcs_dict.csv")
+
+start_time = time.time()
+full_dataset = CowsDataset(root_dir_path, csv_path, mode='contour')
+end_time = time.time()
+print(f"time taken: {end_time - start_time}")
+
+frames = []
+for i in range(200):
+    frames.append(full_dataset[i][0])
+
+fig, ax = plt.subplots()
+def update_frame(frame_idx):
+  frame = frames[frame_idx]
+  ax.cla()
+  img = ax.imshow(frame)
+  return img
+
+animation = FuncAnimation(fig, update_frame, frames=len(frames), interval=50)
+plt.show()
 

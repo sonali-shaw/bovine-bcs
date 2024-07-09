@@ -3,9 +3,16 @@ import math
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+import time
 
+start_time = time.time()
 
-full_dataset = CowsDataset("/Volumes/Samsung USB/depth_processed", "/Volumes/Samsung USB/bcs_dict.csv", permute=True)
+csv_path = Path("/Volumes/Samsung USB/bcs_dict.csv")
+
+full_dataset = CowsDataset("/Volumes/Samsung USB/depth_processed", csv_path, mode='gradangle', permute=False)
+
+end_time = time.time()
+print(f"elapsed time: {end_time - start_time}")
 
 frames = []
 for i in range(50):
