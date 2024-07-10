@@ -24,8 +24,7 @@ class CowsDataset(Dataset):
                root_dir: Path | str,
                csv_file: Path | str,
                mode: str = 'depth',
-               permute: bool = False,
-               permuted_types: tuple = ()
+               transform = None
               ):
 
     self.root_dir = Path(root_dir) if not isinstance(root_dir, Path) else root_dir
@@ -33,6 +32,10 @@ class CowsDataset(Dataset):
 
     self.dataset = []
     self.padded_imgs = []
+    self.labels = ['200', '225', '250', '275', '300', '325', '350', '375', '400', '425', '450']
+    self.label_mapping = {label: idx for idx, label in enumerate(self.labels)}
+    if transform: self.transform = transform
+
     if mode == 'permute':
         modes = [ 'depth', 'adjacent', 'contour', 'median', 'laplacian', 'gradangle']
     if type(mode) == tuple:
@@ -48,21 +51,19 @@ class CowsDataset(Dataset):
         """ helper function for getting the name to search the csv file"""
         name_spl = name.split("_")
         return name_spl[0] + "_" + name_spl[1]
-    def __get_frame_length(arr):
-        biggest = 0
-        for i in range(len(arr)):
-            var = len(arr[i])
-            if var > biggest:
-                biggest = var
-        return biggest
-    def __get_channel_length(arr):
-        biggest = 0
-        for i in range(len(arr)):
-            for j in range(len(arr[i])):
-                var = len(arr[i][j])
-                if var > biggest:
-                    biggest = var
-        return biggest
+
+    def __get_frame_and_channel_length(arr):
+        largest_frame = 0
+        largest_channel = 0
+        for frame in arr:
+            frame_length = len(frame)
+            if frame_length > largest_frame:
+                largest_frame = frame_length
+            for channel in frame:
+                channel_length = len(channel)
+                if channel_length > largest_channel:
+                    largest_channel = channel_length
+        return largest_frame, largest_channel
 
     csv_df = pd.read_csv(self.csv_file)
     label_dict = {}
@@ -74,7 +75,7 @@ class CowsDataset(Dataset):
         label_dict[filename] = bcs
 
     all_imgs = []
-    corr_labels = []
+    corr_labels = [] # corresponding labels
     filenames = os.listdir(self.root_dir)
     for name in filenames:
         if name[0] != ".":
@@ -85,14 +86,18 @@ class CowsDataset(Dataset):
                     rand_mode = modes[random.randint(0, 5)]
                     all_imgs.append(file_np[rand_mode][i])
                     corr_labels.append(label)
+            elif type(mode) == tuple:
+                for i in range(50):
+                    rand_mode = modes[[random.randint(0, len(modes)-1)]]
+                    all_imgs.append(file_np[rand_mode][i])
+                    corr_labels.append(label)
             else:
                 video = np.array(file_np[mode])
                 for img in video:
                     all_imgs.append(img)
                     corr_labels.append(label)
 
-    channel_length = __get_channel_length(all_imgs)
-    frame_length = __get_frame_length(all_imgs)
+    frame_length, channel_length = __get_frame_and_channel_length(all_imgs)
     for i in range(len(all_imgs)):
         padded_img = __pad_array_to_shape(all_imgs[i], (frame_length, channel_length))
         self.dataset.append( (padded_img, corr_labels[i]) )
@@ -101,28 +106,32 @@ class CowsDataset(Dataset):
     return len(self.dataset)
 
   def __getitem__(self, idx):
-    item = self.dataset[idx]
-    return torch.from_numpy(item[0]), item[1]
+    image, label = self.dataset[idx]
+    if self.transform:
+        item_transformed = self.transform(image)
+        return item_transformed, label
+    return image, label
 
-root_dir_path = Path("/Volumes/Samsung USB/depth_processed")
-csv_path = Path("/Volumes/Samsung USB/bcs_dict.csv")
+# root_dir_path = Path("/Volumes/Samsung USB/depth_processed")
+# csv_path = Path("/Volumes/Samsung USB/bcs_dict.csv")
+#
+# start_time = time.time()
+# full_dataset = CowsDataset(root_dir_path, csv_path, mode='permute')
+# end_time = time.time()
+# print(f"time taken: {end_time - start_time}")
 
-start_time = time.time()
-full_dataset = CowsDataset(root_dir_path, csv_path, mode='permute')
-end_time = time.time()
-print(f"time taken: {end_time - start_time}")
-
-frames = []
-for i in range(200):
-    frames.append(full_dataset[i][0])
-
-fig, ax = plt.subplots()
-def update_frame(frame_idx):
-  frame = frames[frame_idx]
-  ax.cla()
-  img = ax.imshow(frame)
-  return img
-
-animation = FuncAnimation(fig, update_frame, frames=len(frames), interval=50)
-plt.show()
+# visualization
+# frames = []
+# for i in range(200):
+#     frames.append(full_dataset[i][0])
+#
+# fig, ax = plt.subplots()
+# def update_frame(frame_idx):
+#   frame = frames[frame_idx]
+#   ax.cla()
+#   img = ax.imshow(frame)
+#   return img
+#
+# animation = FuncAnimation(fig, update_frame, frames=len(frames), interval=50)
+# plt.show()
 
