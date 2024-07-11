@@ -81,6 +81,8 @@ if __name__ == '__main__':
     train_loss, train_acc = 0, 0
     # model.to(device)
     for batch, (X, y) in enumerate(train_dataloader):
+        print(batch)
+        print(X, y)
         model.train()
         y_pred = model(X)
         loss = criterion(y_pred, y)

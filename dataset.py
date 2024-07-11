@@ -11,6 +11,8 @@ import pandas as pd
 import time
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+from torchvision import transforms
+
 
 # folder_path = "/Volumes/Samsung USB/depth_processed"
 
@@ -33,7 +35,8 @@ class CowsDataset(Dataset):
     self.dataset = []
     self.padded_imgs = []
     self.labels = ['200', '225', '250', '275', '300', '325', '350', '375', '400', '425', '450']
-    self.label_mapping = {label: idx for idx, label in enumerate(self.labels)}
+    # self.labels = {label: idx for idx, label in enumerate(self.labels)}
+    # self.labels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     if transform: self.transform = transform
 
     if mode == 'permute':
@@ -112,13 +115,14 @@ class CowsDataset(Dataset):
         return item_transformed, label
     return image, label
 
-# root_dir_path = Path("/Volumes/Samsung USB/depth_processed")
-# csv_path = Path("/Volumes/Samsung USB/bcs_dict.csv")
-#
-# start_time = time.time()
-# full_dataset = CowsDataset(root_dir_path, csv_path, mode='permute')
-# end_time = time.time()
-# print(f"time taken: {end_time - start_time}")
+start_time = time.time()
+full_dataset = CowsDataset("/Users/safesonali/Desktop/DSI-2024/depth_processed",
+                               "/Users/safesonali/Desktop/DSI-2024/bcs_dict.csv",
+                               mode='gradangle',
+                            transform=transforms.ToTensor())
+end_time = time.time()
+print(f"time taken: {end_time - start_time}")
+print(full_dataset[0])
 
 # visualization
 # frames = []
