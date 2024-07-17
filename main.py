@@ -18,9 +18,10 @@ from tqdm.auto import tqdm
 
 if __name__ == '__main__':
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     transform = transforms.Compose([
         transforms.ToTensor(),
-        # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        transforms.Normalize(mean=[0.5], std=[0.5])
     ])
 
     full_dataset = CowsDataset("/Users/safesonali/Desktop/DSI-2024/depth_processed",
@@ -32,7 +33,7 @@ if __name__ == '__main__':
     test_size = len(full_dataset) - train_size
     train_data, test_data = torch.utils.data.random_split(full_dataset, [train_size, test_size])
 
-    BATCH_SIZE = 16
+    BATCH_SIZE = 32
 
     train_dataloader = DataLoader(dataset=train_data,
                                   batch_size=BATCH_SIZE,
@@ -45,6 +46,9 @@ if __name__ == '__main__':
                                  shuffle=False)
 
     train_features_batch, train_labels_batch = next(iter(train_dataloader))
+    flatten_model = nn.Flatten()
+    x = train_features_batch[0]
+    output = flatten_model(x)
     class_names = full_dataset.labels
 
     def print_train_time(start: float, end: float, device: torch.device = None):
@@ -88,24 +92,28 @@ if __name__ == '__main__':
     loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(params=model_0.parameters(), lr=0.1)
 
-    torch.manual_seed(23)
     train_time_start = timer()
-    epochs = 1
+    torch.manual_seed(43)
+    epochs = 10
 
     for epoch in tqdm(range(epochs)):
-        print(f"Epoch: {epoch}\n-------")
-        train_loss = 0
+        print(f"Epoch: {epoch+1}\n-------")
+        train_loss, train_acc = 0, 0
         for batch, (X, y) in enumerate(train_dataloader):
             model_0.train()
             y_pred = model_0(X)
             loss = loss_fn(y_pred, y)
             train_loss += loss
+            train_acc += accuracy_fn(y_true=y, y_pred=y_pred.argmax(dim=1))
+            print(f"train acc in loop: {train_acc}")
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            if batch % 10 == 0:
+            if batch % 8 == 0:
                 print(f"Looked at {batch * len(X)}/{len(train_dataloader.dataset)} samples")
         train_loss /= len(train_dataloader)
+        train_acc /= len(train_dataloader)
+        print(f"Train loss: {train_loss:.5f} | Train accuracy: {train_acc:.2f}%")
 
         ### Validation
         test_loss, test_acc = 0, 0
@@ -115,14 +123,70 @@ if __name__ == '__main__':
                 test_pred = model_0(X)
                 test_loss += loss_fn(test_pred, y)
                 test_acc += accuracy_fn(y_true=y, y_pred=test_pred.argmax(dim=1))
+
             test_loss /= len(test_dataloader)
             test_acc /= len(test_dataloader)
-        print(f"\nTrain loss: {train_loss:.5f} | Test loss: {test_loss:.5f}, Test acc: {test_acc:.2f}%\n")
+            print(f"Test loss: {test_loss:.5f} | Test accuracy: {test_acc:.2f}%\n")
 
     train_time_end = timer()
     total_train_time_model_0 = print_train_time(start=train_time_start,
                                                 end=train_time_end,
                                                 device=str(next(model_0.parameters()).device))
+
+    # testing
+    def eval_model(model: torch.nn.Module,
+                   data_loader: torch.utils.data.DataLoader,
+                   loss_fn: torch.nn.Module,
+                   accuracy_fn,
+                   device: torch.device = device):
+        """Evaluates a given model on a given dataset.
+
+        Args:
+            model (torch.nn.Module): A PyTorch model capable of making predictions on data_loader.
+            data_loader (torch.utils.data.DataLoader): The target dataset to predict on.
+            loss_fn (torch.nn.Module): The loss function of model.
+            accuracy_fn: An accuracy function to compare the models predictions to the truth labels.
+            device (str, optional): Target device to compute on. Defaults to device.
+
+        Returns:
+            (dict): Results of model making predictions on data_loader.
+        """
+        loss, acc = 0, 0
+        model.eval()
+        with torch.inference_mode():
+            for X, y in data_loader:
+                # Send data to the target device
+                X, y = X.to(device), y.to(device)
+                y_pred = model(X)
+                loss += loss_fn(y_pred, y)
+                acc += accuracy_fn(y_true=y, y_pred=y_pred.argmax(dim=1))
+
+            # Scale loss and acc
+            loss /= len(data_loader)
+            acc /= len(data_loader)
+        return {"model_name": model.__class__.__name__,  # only works when model was created with a class
+                "model_loss": loss.item(),
+                "model_acc": acc}
+
+    model_0_results = eval_model(model=model_0,
+                                 data_loader=test_dataloader,
+                                 loss_fn=loss_fn,
+                                 accuracy_fn=accuracy_fn,
+                                 device=device)
+    print(model_0_results)
+
+    # saving
+
+    MODEL_PATH = Path("models")
+    MODEL_PATH.mkdir(parents=True,exist_ok=True)
+
+    MODEL_NAME = "cowsCNNmodel2.pth"
+    MODEL_SAVE_PATH = MODEL_PATH / MODEL_NAME
+
+    print(f"Saving model to: {MODEL_SAVE_PATH}")
+    torch.save(obj=model_0.state_dict(),f=MODEL_SAVE_PATH)
+
+
 
 
 

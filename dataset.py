@@ -37,7 +37,7 @@ class CowsDataset(Dataset):
     self.labels = ['200', '225', '250', '275', '300', '325', '350', '375', '400', '425', '450']
     self.labels = {label: idx for idx, label in enumerate(self.labels)}
     # self.labels = [200, 225, 250, 275, 300, 325, 350, 375, 400, 425, 450]
-    # self.labels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    self.classes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     if transform: self.transform = transform
 
     if mode == 'permute':
@@ -124,6 +124,7 @@ if __name__ == '__main__':
     #                                "/Users/safesonali/Desktop/DSI-2024/bcs_dict.csv",
     #                                mode='gradangle',
     #                             transform=transforms.ToTensor())
+    # print(full_dataset.state_dict())
     # end_time = time.time()
     # print(f"time taken: {end_time - start_time}")
     # # print(full_dataset[0][0])
