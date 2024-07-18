@@ -36,12 +36,12 @@ class CowsDataset(Dataset):
     self.padded_imgs = []
     self.labels = ['200', '225', '250', '275', '300', '325', '350', '375', '400', '425', '450']
     # self.labels = [200, 225, 250, 275, 300, 325, 350, 375, 400, 425, 450]
-    self.labels_normalized = [((int(x) - 200) / (450 - 200)) * 2.5 for x in self.labels]
-    print(self.labels_normalized)
+    # self.labels_normalized = [((int(x) - 200) / (450 - 200)) * 2.5 for x in self.labels]
+    # print(self.labels_normalized)
     # print(f"normalized values: {self.labels_normalized}")
-    # self.labels = {label: idx for idx, label in enumerate(self.labels)} ## maps original labels to 0-9
-    self.labels = {x: ((int(x) - 200) / (450 - 200)) * 2.5 for x in self.labels} #dict that maps normalized values to their original ones
-    # self.classes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    self.labels = {label: idx for idx, label in enumerate(self.labels)} ## maps original labels to 0-9
+    # self.labels = {x: ((int(x) - 200) / (450 - 200)) * 2.5 for x in self.labels} #dict that maps normalized values to their original ones
+    self.classes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     # self.normalized_classes = [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5]
     if transform: self.transform = transform
 

@@ -66,14 +66,14 @@ if __name__ == '__main__':
             super(CowBCSCNN, self).__init__()
             self.resnet = torchvision.models.resnet18(pretrained=True)
             self.resnet.conv1 = nn.Conv2d(input_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
-            self.resnet.fc = nn.Linear(512, 1)  # assuming 11 classes
+            self.resnet.fc = nn.Linear(512, 11)  # assuming 11 classes
 
         def forward(self, xb):
             return self.resnet(xb)
 
     model_0 = CowBCSCNN(input_channels=1)
-    # loss_fn = nn.CrossEntropyLoss() ## for classification
-    loss_fn = nn.MSELoss() # for regression
+    loss_fn = nn.CrossEntropyLoss() ## for classification
+    # loss_fn = nn.MSELoss() # for regression
     optimizer = torch.optim.SGD(params=model_0.parameters(), lr=0.01)
 
     train_time_start = timer()
@@ -87,7 +87,7 @@ if __name__ == '__main__':
             start_batch = timer()
             model_0.train()
             y_pred = model_0(X)
-            loss = loss_fn(y_pred, y.float())
+            loss = loss_fn(y_pred, y)
             train_loss += loss
             train_acc += accuracy_fn(y_true=y, y_pred=y_pred.argmax(dim=1))
             optimizer.zero_grad()
@@ -106,7 +106,7 @@ if __name__ == '__main__':
         with torch.inference_mode():
             for X, y in test_dataloader:
                 test_pred = model_0(X)
-                test_loss += loss_fn(test_pred, y.float())
+                test_loss += loss_fn(test_pred, y)
                 test_acc += accuracy_fn(y_true=y, y_pred=test_pred.argmax(dim=1))
             test_loss /= len(test_dataloader)
             test_acc /= len(test_dataloader)
@@ -140,7 +140,7 @@ if __name__ == '__main__':
         with torch.inference_mode():
             for X, y in data_loader:
                 # Send data to the target device
-                X, y = X.to(device), y.to(device).float()
+                X, y = X.to(device), y.to(device)
                 y_pred = model(X)
                 loss += loss_fn(y_pred, y)
                 acc += accuracy_fn(y_true=y, y_pred=y_pred.argmax(dim=1))
