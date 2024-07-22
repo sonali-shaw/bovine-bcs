@@ -1,4 +1,4 @@
-from dataset import *
+from src.dataset import *
 import math
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
@@ -16,22 +16,30 @@ from helper_functions import accuracy_fn
 from timeit import default_timer as timer
 from tqdm.auto import tqdm
 import torchvision
+from datasetold import *
 
 if __name__ == '__main__':
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5], std=[0.5])
-    ])
 
+    # depth
+    # adjacent Y
+    # contour
+    # median
+    # laplacian
+    # gradangle Y
+
+    modes = ['gradangle']
     start_load = timer()
-    full_dataset = CowsDataset("/Users/safesonali/Desktop/DSI-2024/depth_processed",
-                               "/Users/safesonali/Desktop/DSI-2024/bcs_dict.csv",
-                               mode='gradangle',
-                               transform=transform)
+
+    full_dataset = CowDataset(root=Path("/Users/safesonali/Desktop/DSI-2024/depth_processed"),
+                              labels_filename=Path("/Users/safesonali/PycharmProjects/cows/processed_bcs_labels.csv"),
+                              modes=modes,
+                              resize_shape=(234, 516)
+                              )
+
     end_load = timer()
-    print(f"time to load data: {end_load-start_load}")
+    print(f"time to load data: {end_load-start_load:.2f} seconds")
 
     train_size = math.floor(0.8*len(full_dataset))
     test_size = len(full_dataset) - train_size
@@ -49,14 +57,6 @@ if __name__ == '__main__':
                                  num_workers=1,
                                  shuffle=False)
 
-    train_features_batch, train_labels_batch = next(iter(train_dataloader))
-
-    flatten_model = nn.Flatten()
-    x = train_features_batch[0]
-    output = flatten_model(x)
-    class_names = full_dataset.labels
-    # class_names = full_dataset.labels_normalized
-
     def print_train_time(start: float, end: float, device: torch.device = None):
         total_time = end - start
         print(f"Train time on {device}: {total_time:.3f} seconds")
@@ -66,51 +66,53 @@ if __name__ == '__main__':
             super(CowBCSCNN, self).__init__()
             self.resnet = torchvision.models.resnet18(pretrained=True)
             self.resnet.conv1 = nn.Conv2d(input_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
-            self.resnet.fc = nn.Linear(512, 11)  # assuming 11 classes
+            self.resnet.fc = nn.Linear(512, 1)
 
         def forward(self, xb):
             return self.resnet(xb)
 
-    model_0 = CowBCSCNN(input_channels=1)
-    loss_fn = nn.CrossEntropyLoss() ## for classification
-    # loss_fn = nn.MSELoss() # for regression
+    model_0 = CowBCSCNN(input_channels=len(modes)).double()
+    loss_fn = nn.MSELoss()
     optimizer = torch.optim.SGD(params=model_0.parameters(), lr=0.01)
 
     train_time_start = timer()
     torch.manual_seed(43)
     epochs = 4
 
+    transform = transforms.Compose([
+        transforms.Normalize(mean=[0.5], std=[0.5])
+    ])
+
     for epoch in tqdm(range(epochs)):
         print(f"Epoch: {epoch+1}\n-------")
         train_loss, train_acc = 0, 0
+
         for batch, (X, y) in enumerate(train_dataloader):
             start_batch = timer()
             model_0.train()
-            y_pred = model_0(X)
+            y_pred = model_0(X['gradangle'])
+            y = y.view(-1, 1)
             loss = loss_fn(y_pred, y)
             train_loss += loss
-            train_acc += accuracy_fn(y_true=y, y_pred=y_pred.argmax(dim=1))
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             end_batch = timer()
             if batch % 8 == 0:
-                print(f"Looked at {batch * len(X)}/{len(train_dataloader.dataset)} samples")
+                print(f"Looked at {batch * len(X['gradangle'])}/{len(train_dataloader.dataset)} samples")
         train_loss /= len(train_dataloader)
-        train_acc /= len(train_dataloader)
-        print(f"Train loss: {train_loss:.5f} | Train accuracy: {train_acc:.2f}%")
+        print(f"Train loss: {train_loss:.5f}")
 
         ### Validation
         test_loss, test_acc = 0, 0
         model_0.eval()
         with torch.inference_mode():
             for X, y in test_dataloader:
-                test_pred = model_0(X)
+                test_pred = model_0(X['gradangle'])
+                y = y.view(-1, 1)
                 test_loss += loss_fn(test_pred, y)
-                test_acc += accuracy_fn(y_true=y, y_pred=test_pred.argmax(dim=1))
             test_loss /= len(test_dataloader)
-            test_acc /= len(test_dataloader)
-            print(f"Test loss: {test_loss:.5f} | Test accuracy: {test_acc:.2f}%\n")
+            print(f"Test loss: {test_loss:.5f}")
 
     train_time_end = timer()
     total_train_time_model_0 = print_train_time(start=train_time_start,
@@ -135,22 +137,19 @@ if __name__ == '__main__':
         Returns:
             (dict): Results of model making predictions on data_loader.
         """
-        loss, acc = 0, 0
+        loss = 0
         model.eval()
-        with torch.inference_mode():
-            for X, y in data_loader:
-                # Send data to the target device
-                X, y = X.to(device), y.to(device)
-                y_pred = model(X)
-                loss += loss_fn(y_pred, y)
-                acc += accuracy_fn(y_true=y, y_pred=y_pred.argmax(dim=1))
 
-            # Scale loss and acc
+        with torch.inference_mode():
+
+            for X, y in data_loader:
+                y_pred = model(X['gradangle'])
+                y = y.view(-1, 1)
+                loss += loss_fn(y_pred, y)
+
             loss /= len(data_loader)
-            acc /= len(data_loader)
         return {"model_name": model.__class__.__name__,  # only works when model was created with a class
-                "model_loss": loss.item(),
-                "model_acc": acc}
+                "model_loss": loss.item()}
 
     model_results = eval_model(model=model_0,
                                  data_loader=test_dataloader,
@@ -160,15 +159,15 @@ if __name__ == '__main__':
     print(model_results)
 
     # saving
-
-    MODEL_PATH = Path("models")
-    MODEL_PATH.mkdir(parents=True,exist_ok=True)
-
-    MODEL_NAME = "cowsCNNmodel-REGRESSION.pth"
-    MODEL_SAVE_PATH = MODEL_PATH / MODEL_NAME
-
-    print(f"Saving model to: {MODEL_SAVE_PATH}")
-    torch.save(obj=model_0.state_dict(),f=MODEL_SAVE_PATH)
+    #
+    # MODEL_PATH = Path("models")
+    # MODEL_PATH.mkdir(parents=True,exist_ok=True)
+    #
+    # MODEL_NAME = "cowsCNNmodel-REGRESSION.pth"
+    # MODEL_SAVE_PATH = MODEL_PATH / MODEL_NAME
+    #
+    # print(f"Saving model to: {MODEL_SAVE_PATH}")
+    # torch.save(obj=model_0.state_dict(),f=MODEL_SAVE_PATH)
 
 
 

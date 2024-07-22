@@ -21,7 +21,7 @@ class DataObject:
     video: np.ndarray
     label: int
 
-class CowsDataset(Dataset):
+class CowsDatasetOld(Dataset):
   def __init__(self,
                root_dir: Path | str,
                csv_file: Path | str,
