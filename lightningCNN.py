@@ -1,24 +1,36 @@
-import pytorch_lightning as pl
-from pytorch_lightning import Trainer
-from pytorch_lightning.callbacks import ModelCheckpoint
-from pytorch_lightning import LightningDataModule
-from dataset import *
+from datasetold import *
 import math
+from torch.utils.data import DataLoader
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+import time
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torchvision import transforms
+from pytorch_lightning import LightningModule, Trainer, LightningDataModule
+from pytorch_lightning.callbacks import ModelCheckpoint
+from PIL import Image
+from pathlib import Path
 from helper_functions import accuracy_fn
-
+from timeit import default_timer as timer
+from tqdm.auto import tqdm
+import torchvision
+from torchmetrics import Accuracy
 
 class CowsDataModule(LightningDataModule):
-    def __init__(self, data_dir, batch_size, transform):
+    def __init__(self, data_dir, bcs_csv, batch_size=32):
         super().__init__()
         self.data_dir = data_dir
+        self.bcs_csv = bcs_csv
         self.batch_size = batch_size
-        self.transform = transform
+        self.transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5], std=[0.5])
+        ])
 
     def setup(self, stage=None):
-        full_dataset = CowsDataset("/Users/safesonali/Desktop/DSI-2024/depth_processed",
-                               "/Users/safesonali/Desktop/DSI-2024/bcs_dict.csv",
-                               mode='gradangle',
-                               transform=transforms)
+        full_dataset = CowsDatasetOld(self.data_dir, self.bcs_csv, mode='median', transform=self.transform)
         train_size = math.floor(0.8 * len(full_dataset))
         test_size = len(full_dataset) - train_size
         self.train_data, self.test_data = torch.utils.data.random_split(full_dataset, [train_size, test_size])
@@ -29,85 +41,73 @@ class CowsDataModule(LightningDataModule):
     def val_dataloader(self):
         return DataLoader(self.test_data, batch_size=self.batch_size, num_workers=1, shuffle=False)
 
-class CowBCSCNN(pl.LightningModule):
-    def __init__(self, input_channels, lr):
-        super().__init__()
+
+class CowBCSCNN(LightningModule):
+    def __init__(self, input_channels=1, learning_rate=0.01):
+        super(CowBCSCNN, self).__init__()
         self.save_hyperparameters()
-        self.network = nn.Sequential(
-            nn.Conv2d(in_channels=input_channels, out_channels=32, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(2, 2),
-            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(2, 2),
-            nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(2, 2),
-            nn.Flatten(),
-            nn.Linear(256 * 29 * 64, 1024),
-            nn.ReLU(),
-            nn.Linear(1024, 512),
-            nn.ReLU(),
-            nn.Linear(512, 11)
-        )
+        self.resnet = torchvision.models.resnet18(pretrained=True)
+        self.resnet.conv1 = nn.Conv2d(input_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        self.resnet.fc = nn.Linear(512, 11)
         self.loss_fn = nn.CrossEntropyLoss()
+        self.accuracy = Accuracy(task='multiclass', num_classes=11)
 
     def forward(self, xb):
-        return self.network(xb)
+        return self.resnet(xb)
 
     def training_step(self, batch, batch_idx):
         X, y = batch
+        y = y.squeeze().long()
         y_pred = self(X)
+        print(f"Training Step - y_pred shape: {y_pred.shape}, y shape: {y.shape}")
         loss = self.loss_fn(y_pred, y)
-        acc = accuracy_fn(y_true=y, y_pred=y_pred.argmax(dim=1))
-        self.log('train_loss', loss)
-        self.log('train_acc', acc)
+        acc = self.accuracy(y_pred.argmax(dim=1), y)
+        self.log('train_loss', loss, prog_bar=True)
+        self.log('train_acc', acc, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
         X, y = batch
+        y = y.squeeze().long()
         y_pred = self(X)
+        print(f"Validation Step - y_pred shape: {y_pred.shape}, y shape: {y.shape}")
         loss = self.loss_fn(y_pred, y)
-        acc = accuracy_fn(y_true=y, y_pred=y_pred.argmax(dim=1))
-        self.log('val_loss', loss)
-        self.log('val_acc', acc)
-        return loss
+        acc = self.accuracy(y_pred.argmax(dim=1), y)
+        self.log('val_loss', loss, prog_bar=True)
+        self.log('val_acc', acc, prog_bar=True)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.SGD(self.parameters(), lr=self.hparams.lr)
-        return optimizer
+        return optim.SGD(self.parameters(), lr=self.hparams.learning_rate)
 
-def main():
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5], std=[0.5])
-    ])
-
-    data_module = CowsDataModule(data_dir="/Users/safesonali/Desktop/DSI-2024/depth_processed",
-                                 batch_size=32,
-                                 transform=transform)
-
-    model = CowBCSCNN(input_channels=1, lr=0.1)
-
-    checkpoint_callback = ModelCheckpoint(
-        monitor='val_loss',
-        dirpath='models/',
-        filename='cowsCNNmodel-{epoch:02d}-{val_loss:.2f}',
-        save_top_k=1,
-        mode='min',
-    )
-
-    trainer = Trainer(max_epochs=3, callbacks=[checkpoint_callback], accelerator="auto")
-
-    trainer.fit(model, data_module)
-
-    trainer.save_checkpoint("models/cowsCNNmodel-final.ckpt")
 
 if __name__ == '__main__':
-    main()
+    try:
+        data_module = CowsDataModule(data_dir="/Users/safesonali/Desktop/DSI-2024/depth_processed",
+                                     bcs_csv="/Users/safesonali/Desktop/DSI-2024/bcs_dict.csv")
+
+        model = CowBCSCNN()
+
+        checkpoint_callback = ModelCheckpoint(
+            monitor='val_loss',
+            dirpath='models/',
+            filename='cowbcs-cnn-{epoch:02d}-{val_loss:.2f}',
+            save_top_k=1,
+            mode='min',
+        )
+
+        trainer = Trainer(max_epochs=5, callbacks=[checkpoint_callback])
+
+        start_train = timer()
+        trainer.fit(model, data_module)
+        end_train = timer()
+
+        total_train_time = end_train - start_train
+        print(f"Total training time: {total_train_time:.3f} seconds")
+
+        # Model evaluation
+        results = trainer.test(model, dataloaders=data_module.val_dataloader())
+        print(results)
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        import traceback
+        traceback.print_exc()
