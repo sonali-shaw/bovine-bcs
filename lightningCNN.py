@@ -41,6 +41,9 @@ class CowsDataModule(LightningDataModule):
     def val_dataloader(self):
         return DataLoader(self.test_data, batch_size=self.batch_size, num_workers=1, shuffle=False)
 
+    def test_dataloader(self):
+        return DataLoader(self.test_data, batch_size=self.batch_size, num_workers=1, shuffle=False)
+
 
 class CowBCSCNN(LightningModule):
     def __init__(self, input_channels=1, learning_rate=0.01):
@@ -51,6 +54,7 @@ class CowBCSCNN(LightningModule):
         self.resnet.fc = nn.Linear(512, 11)
         self.loss_fn = nn.CrossEntropyLoss()
         self.accuracy = Accuracy(task='multiclass', num_classes=11)
+        self.test_outputs = []
 
     def forward(self, xb):
         return self.resnet(xb)
@@ -76,6 +80,24 @@ class CowBCSCNN(LightningModule):
         self.log('val_loss', loss, prog_bar=True)
         self.log('val_acc', acc, prog_bar=True)
 
+    def test_step(self, batch, batch_idx):
+        X, y = batch
+        y = y.squeeze().long()
+        y_pred = self(X)
+        print(f"Test Step - y_pred shape: {y_pred.shape}, y shape: {y.shape}")
+        loss = self.loss_fn(y_pred, y)
+        acc = self.accuracy(y_pred.argmax(dim=1), y)
+        self.log('test_loss', loss, prog_bar=True)
+        self.log('test_acc', acc, prog_bar=True)
+        self.test_outputs.append({'test_loss': loss, 'test_acc': acc})
+        return loss
+
+    def on_test_epoch_end(self):
+        avg_loss = torch.stack([x['test_loss'] for x in self.test_outputs]).mean()
+        avg_acc = torch.stack([x['test_acc'] for x in self.test_outputs]).mean()
+        self.log('avg_test_loss', avg_loss)
+        self.log('avg_test_acc', avg_acc)
+
     def configure_optimizers(self):
         return optim.SGD(self.parameters(), lr=self.hparams.learning_rate)
 
@@ -95,7 +117,7 @@ if __name__ == '__main__':
             mode='min',
         )
 
-        trainer = Trainer(max_epochs=5, callbacks=[checkpoint_callback])
+        trainer = Trainer(max_epochs=2, callbacks=[checkpoint_callback])
 
         start_train = timer()
         trainer.fit(model, data_module)
@@ -105,7 +127,7 @@ if __name__ == '__main__':
         print(f"Total training time: {total_train_time:.3f} seconds")
 
         # Model evaluation
-        results = trainer.test(model, dataloaders=data_module.val_dataloader())
+        results = trainer.test(model, dataloaders=data_module.test_dataloader())
         print(results)
     except Exception as e:
         print(f"An error occurred: {e}")
