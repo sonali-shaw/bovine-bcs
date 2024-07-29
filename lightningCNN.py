@@ -10,6 +10,7 @@ import torch.optim as optim
 from torchvision import transforms
 from pytorch_lightning import LightningModule, Trainer, LightningDataModule
 from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.loggers import TensorBoardLogger
 from PIL import Image
 from pathlib import Path
 from helper_functions import accuracy_fn
@@ -30,7 +31,7 @@ class CowsDataModule(LightningDataModule):
         ])
 
     def setup(self, stage=None):
-        full_dataset = CowsDatasetOld(self.data_dir, self.bcs_csv, mode='median', transform=self.transform)
+        full_dataset = CowsDatasetOld(self.data_dir, self.bcs_csv, mode='gradangle', transform=self.transform)
         train_size = math.floor(0.8 * len(full_dataset))
         test_size = len(full_dataset) - train_size
         self.train_data, self.test_data = torch.utils.data.random_split(full_dataset, [train_size, test_size])
@@ -43,7 +44,6 @@ class CowsDataModule(LightningDataModule):
 
     def test_dataloader(self):
         return DataLoader(self.test_data, batch_size=self.batch_size, num_workers=1, shuffle=False)
-
 
 class CowBCSCNN(LightningModule):
     def __init__(self, input_channels=1, learning_rate=0.01):
@@ -101,7 +101,6 @@ class CowBCSCNN(LightningModule):
     def configure_optimizers(self):
         return optim.SGD(self.parameters(), lr=self.hparams.learning_rate)
 
-
 if __name__ == '__main__':
     try:
         data_module = CowsDataModule(data_dir="/Users/safesonali/Desktop/DSI-2024/depth_processed",
@@ -117,7 +116,9 @@ if __name__ == '__main__':
             mode='min',
         )
 
-        trainer = Trainer(max_epochs=2, callbacks=[checkpoint_callback])
+        logger = TensorBoardLogger("tb_logs", name="cowbcs_cnn")
+
+        trainer = Trainer(max_epochs=6, callbacks=[checkpoint_callback], logger=logger)
 
         start_train = timer()
         trainer.fit(model, data_module)
@@ -126,9 +127,9 @@ if __name__ == '__main__':
         total_train_time = end_train - start_train
         print(f"Total training time: {total_train_time:.3f} seconds")
 
-        # Model evaluation
         results = trainer.test(model, dataloaders=data_module.test_dataloader())
         print(results)
+
     except Exception as e:
         print(f"An error occurred: {e}")
         import traceback
