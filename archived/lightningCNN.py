@@ -19,6 +19,8 @@ from tqdm.auto import tqdm
 import torchvision
 from torchmetrics import Accuracy
 
+# THIS IS CLASSIFICATION
+
 class CowsDataModule(LightningDataModule):
     def __init__(self, data_dir, bcs_csv, batch_size=32):
         super().__init__()

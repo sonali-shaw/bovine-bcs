@@ -17,6 +17,9 @@ from timeit import default_timer as timer
 from tqdm.auto import tqdm
 import torchvision
 
+
+# classification for the old dataset
+
 if __name__ == '__main__':
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -29,7 +32,7 @@ if __name__ == '__main__':
     full_dataset = CowsDatasetOld("/Users/safesonali/Desktop/DSI-2024/depth_processed",
                                "/Users/safesonali/Desktop/DSI-2024/bcs_dict.csv",
                                mode='depth',
-                            transform=transform)
+                                transform=transform)
 
     end_load = timer()
     print(f"time to load data: {end_load-start_load}")
@@ -54,6 +57,8 @@ if __name__ == '__main__':
         total_time = end - start
         print(f"Train time on {device}: {total_time:.3f} seconds")
         return total_time
+
+
     class CowBCSCNN(nn.Module):
         def __init__(self, input_channels):
             super(CowBCSCNN, self).__init__()

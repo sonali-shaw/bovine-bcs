@@ -19,7 +19,7 @@ if __name__ == '__main__':
     start_load = timer()
     full_dataset = CowsDatasetOld("/Users/safesonali/Desktop/DSI-2024/depth_processed",
                                "/Users/safesonali/Desktop/DSI-2024/bcs_dict.csv",
-                               mode='depth',
+                               mode='median',
                             transform=transform)
     end_load = timer()
     print(f"time to load data: {end_load-start_load}")
@@ -51,7 +51,10 @@ if __name__ == '__main__':
         total_time = end - start
         print(f"Train time on {device}: {total_time:.3f} seconds")
         return total_time
+
+
     class CowBCSCNN(nn.Module):
+
         def __init__(self, input_channels):
             super(CowBCSCNN, self).__init__()
             self.resnet = torchvision.models.resnet18(pretrained=True)
@@ -73,6 +76,7 @@ if __name__ == '__main__':
     for epoch in tqdm(range(epochs)):
         print(f"Epoch: {epoch+1}\n-------")
         train_loss = 0
+
         for batch, (X, y) in enumerate(train_dataloader):
             start_batch = timer()
             model_0.train()
@@ -84,19 +88,24 @@ if __name__ == '__main__':
             loss.backward()
             optimizer.step()
             end_batch = timer()
+
             if batch % 8 == 0:
                 print(f"Looked at {batch * len(X)}/{len(train_dataloader.dataset)} samples")
+
         train_loss /= len(train_dataloader)
         print(f"Train loss: {train_loss:.5f}")
 
         ### Validation
         test_loss = 0
         model_0.eval()
+
         with torch.inference_mode():
+
             for X, y in test_dataloader:
                 test_pred = model_0(X)
                 y = y.view(-1, 1)
                 test_loss += loss_fn(test_pred, y.float())
+
             test_loss /= len(test_dataloader)
             print(f"Test loss: {test_loss:.5f}")
 
@@ -124,12 +133,16 @@ if __name__ == '__main__':
         """
         loss = 0
         model.eval()
+
         with torch.inference_mode():
+
             for X, y in data_loader:
                 y_pred = model(X)
                 y = y.view(-1, 1)
                 loss += loss_fn(y_pred, y.float())
+
             loss /= len(data_loader)
+
         return {"model_name": model.__class__.__name__,  # only works when model was created with a class
                 "model_loss": loss.item()}
 

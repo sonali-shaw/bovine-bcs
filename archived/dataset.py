@@ -13,6 +13,9 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from torchvision import transforms
 
+# this is an older version of the dataset, it works for simple things but for scaling the dataset in the src direcotry
+# should be used, this version should not be used for multinode training
+
 @dataclass
 class DataObject:
     video: np.ndarray
@@ -41,7 +44,17 @@ class CowsDatasetOld(Dataset):
     if type(mode) == tuple:
         modes = list(mode)
 
-    def __pad_array_to_shape(a, target_shape):
+    def __pad_array_to_shape(a: np.array, target_shape: (int, int)) -> np.array:
+        """ each of the numpy arrays are different shapes so this pads them out to be the same shape
+
+            Args:
+                a (numpy array): target array
+                target_shape ( (int, int) ) : the desired shape for the array
+
+            Returns:
+                A new padded array
+
+        """
         # each of the numpy arrays are different shapes so this pads them out to be the same shape
         pad_width = [(0, max(t - s, 0)) for s, t in zip(a.shape, target_shape)]
         padded_array = np.pad(a, pad_width, mode='constant', constant_values=0)
@@ -49,29 +62,42 @@ class CowsDatasetOld(Dataset):
         padded_array = padded_array[slices]
         return padded_array
 
-    def search_name(name):
-        """ helper function for getting the name to search the csv file"""
+    def search_name(name: str) -> str:
+        """ Given the name of a file returns the file name corresponding to that file in the csv.
+
+        Args:
+            name (str) : the name of the file
+            
+        Returns:
+            the file name from the csv corresponding to the file name passed in
+
+        """
         name_spl = name.split("_")
         return name_spl[0] + "_" + name_spl[1]
 
-    def __get_lengths(arr):
-        # returns the inner and outer largest dimesnions to be referenced for padding out the arrays
-        largest_frame = 0
-        largest_channel = 0
+    def __get_lengths(arr: np.array) -> (int, int):
+        """  Gets the inner and outer largest dimensions to be referenced for padding out the arrays
+        
+        :param arr: the array to find the dimensions for
+        :return: the largest values found in the array for the inner two dimensions
+        """
+        largest_dim_1 = 0
+        largest_dim_2 = 0
         for frame in arr:
             frame_length = len(frame)
-            if frame_length > largest_frame:
-                largest_frame = frame_length
+            if frame_length > largest_dim_1:
+                largest_dim_1 = frame_length
             for channel in frame:
                 channel_length = len(channel)
-                if channel_length > largest_channel:
-                    largest_channel = channel_length
-        return largest_frame, largest_channel
+                if channel_length > largest_dim_2:
+                    largest_dim_2 = channel_length
+        return largest_dim_1, largest_dim_2
 
     csv_df = pd.read_csv(self.csv_file)
     label_dict = {}
 
     for tup in csv_df.itertuples():
+
         filename, bcs = tup.filename, tup.BCSq
         filename = filename.split("_")
         filename = "_".join([filename[i] for i in (0, 1)])
