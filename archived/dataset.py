@@ -13,9 +13,6 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from torchvision import transforms
 
-
-# folder_path = "/Volumes/Samsung USB/depth_processed"
-
 @dataclass
 class DataObject:
     video: np.ndarray
@@ -26,7 +23,7 @@ class CowsDatasetOld(Dataset):
                root_dir: Path | str,
                csv_file: Path | str,
                mode: str = 'depth',
-               transform = None
+               transform: bool = None
               ):
 
     self.root_dir = Path(root_dir) if not isinstance(root_dir, Path) else root_dir
@@ -35,15 +32,9 @@ class CowsDatasetOld(Dataset):
     self.dataset = []
     self.padded_imgs = []
     self.labels = ['200', '225', '250', '275', '300', '325', '350', '375', '400', '425', '450']
-    # self.labels = [200, 225, 250, 275, 300, 325, 350, 375, 400, 425, 450]
-    # self.labels_normalized = [((int(x) - 200) / (450 - 200)) * 2.5 for x in self.labels]
-    # print(self.labels_normalized)
-    # print(f"normalized values: {self.labels_normalized}")
     self.labels = {label: idx for idx, label in enumerate(self.labels)} ## maps original labels to 0-9
-    # self.labels = {x: ((int(x) - 200) / (450 - 200)) * 2.5 for x in self.labels} #dict that maps normalized values to their original ones
-    self.classes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    # self.normalized_classes = [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5]
-    if transform: self.transform = transform
+
+    self.transform = transform
 
     if mode == 'permute':
         modes = [ 'depth', 'adjacent', 'contour', 'median', 'laplacian', 'gradangle']
@@ -51,17 +42,20 @@ class CowsDatasetOld(Dataset):
         modes = list(mode)
 
     def __pad_array_to_shape(a, target_shape):
+        # each of the numpy arrays are different shapes so this pads them out to be the same shape
         pad_width = [(0, max(t - s, 0)) for s, t in zip(a.shape, target_shape)]
         padded_array = np.pad(a, pad_width, mode='constant', constant_values=0)
         slices = tuple(slice(0, t) for t in target_shape)
         padded_array = padded_array[slices]
         return padded_array
+
     def search_name(name):
         """ helper function for getting the name to search the csv file"""
         name_spl = name.split("_")
         return name_spl[0] + "_" + name_spl[1]
 
-    def __get_frame_and_channel_length(arr):
+    def __get_lengths(arr):
+        # returns the inner and outer largest dimesnions to be referenced for padding out the arrays
         largest_frame = 0
         largest_channel = 0
         for frame in arr:
@@ -107,7 +101,7 @@ class CowsDatasetOld(Dataset):
                     all_imgs.append(img)
                     corr_labels.append(mapped_lbl)
 
-    frame_length, channel_length = __get_frame_and_channel_length(all_imgs)
+    frame_length, channel_length = __get_lengths(all_imgs)
     for i in range(len(all_imgs)):
         padded_img = __pad_array_to_shape(all_imgs[i], (frame_length, channel_length))
         self.dataset.append( (padded_img, corr_labels[i]) )
@@ -125,16 +119,21 @@ class CowsDatasetOld(Dataset):
 if __name__ == '__main__':
     pass
     # start_time = time.time()
-    # full_dataset = CowsDataset("/Users/safesonali/Desktop/DSI-2024/depth_processed",
-    #                                "/Users/safesonali/Desktop/DSI-2024/bcs_dict.csv",
-    #                                mode='gradangle',
-    #                             transform=transforms.ToTensor())
+    full_dataset = CowsDatasetOld("/Users/safesonali/Desktop/DSI-2024/depth_processed",
+                                   "/Users/safesonali/Desktop/DSI-2024/bcs_dict.csv",
+                                   mode='depth',
+                                transform=transforms.ToTensor())
     # print(full_dataset.state_dict())
     # end_time = time.time()
     # print(f"time taken: {end_time - start_time}")
     # # print(full_dataset[0][0])
     # print(len(full_dataset[0][0][0]))
     # print(len(full_dataset[0][0][0][0]))
+
+    img, label = full_dataset[340]
+    plt.imshow(img[0])
+    plt.show()
+    print(label)
 
 
     # for i in range(10):

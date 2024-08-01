@@ -10,6 +10,9 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 from torchvision.transforms.functional import InterpolationMode
 
+from pathlib import Path
+
+
 
 class Modes(str, enum.Enum):
     ADJACENT = "adjacent"
@@ -85,7 +88,7 @@ class CowDataset(Dataset):
             and the values being the corresponding `torch.Tensor`.
         """
         row = self._data.iloc[batch_idx]
-        inputs = {mode: self.resizer(row[mode].unsqueeze(dim=0)) for mode in self.modes}
+        inputs = {mode: self.resizer(row['mode'].unsqueeze(dim=0)) for mode in self.modes}
         targets = row.bcs
 
         return inputs, targets
@@ -143,5 +146,8 @@ if __name__ == "__main__":
         "../processed_bcs_labels.csv",
         modes=["depth", "median", "gradangle"],
     )
+
+
+
     print(data)
     print("Number of data samples:", len(data))
